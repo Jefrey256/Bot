@@ -1,0 +1,1239 @@
+const fs  = require('fs');
+const path = './K-PLUGINS/lib/rpg.json';
+
+/* ──────────────────── UTILITÁRIOS BÁSICOS ──────────────────── */
+const salvar   = (db) => fs.writeFileSync(path, JSON.stringify(db, null, 2));
+const carregar = () => fs.existsSync(path) ? JSON.parse(fs.readFileSync(path)) : {};
+
+const loja = {                 // itens disponíveis para compra
+  comida:      { nome: 'Comida Premium',   preco: 50,  efeito: { fome: +50 } },
+  shampoo:     { nome: 'Shampoo',          preco: 70,  efeito: { higiene: +70 } },
+  energetico:  { nome: 'Energético',       preco: 100, efeito: { sono: +80, vida: -10 } },
+  cura:        { nome: 'Poção de Cura',    preco: 200, efeito: { vida: +100 } },
+  roupaazul:   { nome: 'Roupa Azul',       preco: 150, tipo: 'roupa' },
+  skindragao:  { nome: 'Skin Dragão',      preco: 300, tipo: 'skin' }
+};
+
+const aplicarEfeito = (user, efeito = {}) => {
+  for (const [k, v] of Object.entries(efeito)) {
+    user[k] = Math.max(0, Math.min(100, user[k] + v));
+  }
+};
+
+const ganharXp = (user, qtd = 10) => {
+  user.xp += qtd;
+  const preciso = 100 + (user.nivel - 1) * 50;
+  if (user.xp >= preciso) {
+    user.xp -= preciso;
+    user.nivel += 1;
+  }
+};
+
+/* ────────────────────── FUNÇÕES DE CASES ────────────────────── */
+
+// REGISTRAR
+function caseregistrar(kimorin, from, id, prefix, pushname) {
+  try {
+    const db = carregar();
+
+    if (db[id]) {
+      return kimorin.sendMessage(from, { text: '🪪 Você já está registrado!' });
+    }
+
+    db[id] = {
+      nome: pushname || "Jogador",
+      moedas: 500,
+      xp: 0,
+      nivel: 1,
+      vida: 100,
+      fome: 100,
+      energia: 100,
+      banco: 0,
+      trabalho: null,
+      trabalhos: 0,
+      conquistou: [],
+      desafios: [],
+      pet: null,
+      casa: null,
+      familia: [],
+      inventario: [],
+      ultimos: {},
+      sorte: {},
+      ultSorte: "",
+      promovido: false
+    };
+
+salvar(db);
+    kimorin.sendMessage(from, {
+      text: `✅ *Registro completo!*\n\nBem-vindo ao RPG, *${pushname || "Jogador"}*!\nUse *menu* ou *ajuda* para ver os comandos.`
+    });
+  } catch (e) {
+    kimorin.sendMessage(from, { text: `❌ Erro ao registrar: ${e.message}` });
+  }
+}
+
+// STATUS
+function casestatus(kimorin, from, id, prefix) {
+  try {
+    const user = carregar()[id];
+    if (!user) return kimorin.sendMessage(from, {text:`❌ Você não tem uma conta\n✅Use ${prefix}registrar [nome]`});
+    kimorin.sendMessage(from, {
+      text: `📊 *STATUS DE ${user.nome}*\n`
+          + `❤️ Vida: ${user.vida}/100 (${user.status})\n`
+          + `🍴 Fome: ${user.fome}/100\n💤 Sono: ${user.sono}/100\n🛁 Higiene: ${user.higiene}/100`
+          + `\n🎉 Diversão: ${user.diversao}/100\n💰 Moedas: ${user.moedas}\n⭐ Nível: ${user.nivel} | XP: ${user.xp}\n`
+    });
+  } catch(e){ kimorin.sendMessage(from,{text:`❌ Erro: ${e.message}`}); }
+}
+
+// ALIMENTAR
+function casealimentar(kimorin, from, id, prefix) {
+  try {
+    const db   = carregar(); const u = db[id];
+    if(!u) return kimorin.sendMessage(from,{text:`❌ Você não tem uma conta\n✅Use ${prefix}registrar [nome]`});
+    if(u.moedas<20) return kimorin.sendMessage(from,{text:'💸 Sem moedas suficientes.'});
+    if(u.fome>=100) return kimorin.sendMessage(from,{text:'🍽️ Já está satisfeito!'});
+    u.moedas -= 20; aplicarEfeito(u,{fome:+30}); ganharXp(u,5);
+    salvar(db);
+    kimorin.sendMessage(from,{text:`🍕 Alimentado! Fome ${u.fome}/100\n💰 Moedas: ${u.moedas}`});
+  }catch(e){kimorin.sendMessage(from,{text:`❌ Erro: ${e.message}`});}
+}
+
+// DORMIR
+function casedormir(kimorin,from,id, prefix){
+  try{
+    const db=carregar();const u=db[id];
+    if(!u) return kimorin.sendMessage(from,{text:`❌ Você não tem uma conta\n✅Use ${prefix}registrar [nome]`});
+    aplicarEfeito(u,{sono:+50}); ganharXp(u,5); salvar(db);
+    kimorin.sendMessage(from,{text:`😴 Dormiu bem! Sono ${u.sono}/100`});
+  }catch(e){kimorin.sendMessage(from,{text:`❌ Erro: ${e.message}`});}
+}
+
+// BANHO
+function casebanho(kimorin,from,id, prefix){
+  try{
+    const db=carregar();const u=db[id];
+    if(!u) return kimorin.sendMessage(from,{text:`❌ Você não tem uma conta\n✅Use ${prefix}registrar [nome]`});
+    aplicarEfeito(u,{higiene:+40}); ganharXp(u,5); salvar(db);
+    kimorin.sendMessage(from,{text:`🧼 Banho tomado! Higiene ${u.higiene}/100`});
+  }catch(e){kimorin.sendMessage(from,{text:`❌ Erro: ${e.message}`});}
+}
+
+// BRINCAR
+function casebrincar(kimorin,from,id, prefix){
+  try{
+    const db=carregar();const u=db[id];
+    if(!u) return kimorin.sendMessage(from,{text:`❌ Você não tem uma conta\n✅Use ${prefix}registrar [nome]`});
+    aplicarEfeito(u,{diversao:+40,sono:-10,fome:-10}); ganharXp(u,8); u.missoes.brincar=true;
+    salvar(db);
+    kimorin.sendMessage(from,{text:`🎮 Brincou! Diversão ${u.diversao}/100 (Sono -10 / Fome -10)`});
+  }catch(e){kimorin.sendMessage(from,{text:`❌ Erro: ${e.message}`});}
+}
+
+// TRABALHAR
+function casetrabalhar(kimorin,from,id, prefix){
+  try{
+    const db=carregar();const u=db[id];
+    if(!u) return kimorin.sendMessage(from,{text:`❌ Você não tem uma conta\n✅Use ${prefix}registrar [nome]`});
+    const ganho=Math.floor(Math.random()*101)+50;
+    u.moedas+=ganho; aplicarEfeito(u,{sono:-20,fome:-20,diversao:-10}); ganharXp(u,10);
+    salvar(db);
+    kimorin.sendMessage(from,{text:`💼 Trabalhou e ganhou 💰${ganho}\n(Sono -20 / Fome -20 / Diversão -10)`});
+  }catch(e){kimorin.sendMessage(from,{text:`❌ Erro: ${e.message}`});}
+}
+
+/* ───────────── ECONOMIA & ITENS ───────────── */
+
+// LOJA
+function caseloja(kimorin,from, prefix){
+  try{
+    let msg='🏪 *LOJA DE ITENS*\n\n';
+    Object.entries(loja).forEach(([k,v])=>{
+      msg+=`🔹 ${v.nome} — ${v.preco} moedas ${v.efeito?`| Efeito: ${JSON.stringify(v.efeito)}`:''}\n`;
+    });
+    msg+='\nUse: comprar [item]';
+    kimorin.sendMessage(from,{text:msg});
+  }catch(e){kimorin.sendMessage(from,{text:`❌ Erro: ${e.message}`});}
+}
+
+// COMPRAR
+function casecomprar(kimorin,from,id,args, prefix){
+  try{
+    const item=args[0]?.toLowerCase();
+    if(!item||!loja[item]) return kimorin.sendMessage(from,{text:'❌ Item inexistente.'});
+    const db=carregar();const u=db[id];
+    if(!u) return kimorin.sendMessage(from,{text:`❌ Você não tem uma conta\n✅Use ${prefix}registrar [nome]`});
+    const prod=loja[item];
+    if(u.moedas<prod.preco) return kimorin.sendMessage(from,{text:'💸 Moedas insuficientes.'});
+    u.moedas-=prod.preco; u.inventario.push(item); salvar(db);
+    kimorin.sendMessage(from,{text:`✅ Você comprou ${prod.nome}!\n💰 Moedas restantes: ${u.moedas}`});
+  }catch(e){kimorin.sendMessage(from,{text:`❌ Erro: ${e.message}`});}
+}
+
+// INVENTÁRIO
+function caseinventario(kimorin,from,id, prefix){
+  try{
+    const u=carregar()[id];
+    if(!u) return kimorin.sendMessage(from,{text:`❌ Você não tem uma conta\n✅Use ${prefix}registrar [nome]`});
+    if(!u.inventario.length) return kimorin.sendMessage(from,{text:'📦 Inventário vazio.'});
+    const lista=u.inventario.map((it,i)=>`${i+1}. ${loja[it]?.nome || it}`).join('\n');
+    kimorin.sendMessage(from,{text:`📦 *Inventário*\n${lista}\n\nUse: usaritem [item] | equipar [item]`});
+  }catch(e){kimorin.sendMessage(from,{text:`❌ Erro: ${e.message}`});}
+}
+
+// USAR ITEM
+function caseusaritem(kimorin,from,id,args, prefix){
+  try{
+    const item=args[0]?.toLowerCase();
+    const db=carregar();const u=db[id];
+    if(!u) return kimorin.sendMessage(from,{text:`❌ Você não tem uma conta\n✅Use ${prefix}registrar [nome]`});
+    const idx=u.inventario.indexOf(item);
+    if(idx===-1) return kimorin.sendMessage(from,{text:'❌ Item não está no inventário.'});
+    const prod=loja[item];
+    if(prod.tipo){ // roupas/skins não são “usadas”, mas equipadas
+      return kimorin.sendMessage(from,{text:'⚠️ Esse item é para *equipar*, use: equipar [item]'});
+    }
+    aplicarEfeito(u,prod.efeito); u.inventario.splice(idx,1); ganharXp(u,5);
+    salvar(db);
+    kimorin.sendMessage(from,{text:`✅ Usou ${prod.nome}!\nStatus atualizados.`});
+  }catch(e){kimorin.sendMessage(from,{text:`❌ Erro: ${e.message}`});}
+}
+
+// EQUIPAR ROUPA / SKIN
+function caseequipar(kimorin,from,id,args, prefix){
+  try{
+    const item=args[0]?.toLowerCase();
+    const db=carregar();const u=db[id];
+    if(!u) return kimorin.sendMessage(from,{text:`❌ Você não tem uma conta\n✅Use ${prefix}registrar [nome]`});
+    if(!u.inventario.includes(item)) return kimorin.sendMessage(from,{text:'❌ Item não está no inventário.'});
+    const prod=loja[item];
+    if(!prod.tipo) return kimorin.sendMessage(from,{text:'❌ Esse item não é equipável.'});
+    u.equipado[prod.tipo]=item;
+    salvar(db);
+    kimorin.sendMessage(from,{text:`👗 Você equipou ${prod.nome}!`});
+  }catch(e){kimorin.sendMessage(from,{text:`❌ Erro: ${e.message}`});}
+}
+
+// CURA DO PET
+function casecura(kimorin,from,id, prefix){
+  try{
+    const db=carregar();const u=db[id];
+    if(!u) return kimorin.sendMessage(from,{text:`❌ Você não tem uma conta\n✅Use ${prefix}registrar [nome]`});
+    if(u.status!=='doente') return kimorin.sendMessage(from,{text:'😎 Seu pet não está doente.'});
+    if(u.moedas<200) return kimorin.sendMessage(from,{text:'💸 200 moedas necessárias para tratamento.'});
+    u.moedas-=200; u.status='vivo'; u.vida=100; salvar(db);
+    kimorin.sendMessage(from,{text:'❤️ Seu pet foi curado!'});
+  }catch(e){kimorin.sendMessage(from,{text:`❌ Erro: ${e.message}`});}
+}
+
+/* ───────────── MISSÕES DIÁRIAS & RANKING ───────────── */
+
+// MISSÕES
+function casemissoes(kimorin,from,id, prefix){
+  try{
+    const db=carregar();const u=db[id];
+    if(!u) return kimorin.sendMessage(from,{text:`❌ Você não tem uma conta\n✅Use ${prefix}registrar [nome]`});
+    const todasFeitas = Object.values(u.missoes).every(v=>v);
+    if(todasFeitas){
+      u.missoes={brincar:false,alimentar:false,banho:false};
+      u.moedas+=100; ganharXp(u,20); salvar(db);
+      return kimorin.sendMessage(from,{text:'🎉 Missões completas! +100 moedas e +20 XP. Reiniciando missões.'});
+    }
+    let txt='📜 *Missões diárias*\n';
+    Object.entries(u.missoes).forEach(([k,v])=>{
+      txt+=`• ${k.charAt(0).toUpperCase()+k.slice(1)}: ${v?'✅':'❌'}\n`;
+    });
+    txt+='\nConclua todas para ganhar +100 moedas e 20 XP.';
+    kimorin.sendMessage(from,{text:txt});
+  }catch(e){kimorin.sendMessage(from,{text:`❌ Erro: ${e.message}`});}
+}
+
+// RANKING
+function caseranking(kimorin,from,prefix,tipo='nivel'){
+  try{
+    const db=carregar(); const arr=Object.entries(db);
+    if(!arr.length) return kimorin.sendMessage(from,{text:'⚠️ Sem jogadores registrados.'});
+    let lista=arr.sort((a,b)=>b[1][tipo]-a[1][tipo]).slice(0,10);
+    let txt=`🏆 *Top 10 por ${tipo === 'nivel' ? 'Nível' : 'Moedas'}*\n`;
+    lista.forEach(([id,u],i)=>{
+      txt+=`${i+1}. ${u.nome} — ${u[tipo]}\n`;
+    });
+    kimorin.sendMessage(from,{text:txt});
+  }catch(e){kimorin.sendMessage(from,{text:`❌ Erro: ${e.message}`});}
+}
+
+function caserankingxp(kimorin, from, prefix) {
+  try {
+    const db = carregar();
+    const usuarios = Object.values(db);
+
+    usuarios.sort((a, b) => (b.nivel || 0) - (a.nivel || 0));
+    let texto = "🏆 *Ranking de Níveis* 🏆\n\n";
+    usuarios.slice(0, 10).forEach((u, i) => {
+      texto += `${i + 1}. ${u.nome} - Nível: ${u.nivel || 0} | XP: ${u.xp || 0}\n`;
+    });
+
+    kimorin.sendMessage(from, { text: texto });
+  } catch (e) {
+    kimorin.sendMessage(from, { text: `❌ Erro: ${e.message}` });
+  }
+}
+
+const eventosAleatorios = [
+  { texto: "Você encontrou uma fonte mágica e recuperou 50 de vida!", acao: (u) => { u.vida = Math.min(100, (u.vida || 100) + 50); } },
+  { texto: "Um ladrão roubou 100 moedas suas!", acao: (u) => { u.moedas = Math.max(0, (u.moedas || 0) - 100); } },
+  { texto: "Você achou um baú com 200 moedas!", acao: (u) => { u.moedas = (u.moedas || 0) + 200; } },
+  { texto: "Um raio caiu perto de você, perdeu 30 de vida!", acao: (u) => { u.vida = Math.max(0, (u.vida || 100) - 30); } },
+];
+
+function caseevento(kimorin, from, id, prefix) {
+  try {
+    const db = carregar();
+    const u = db[id];
+    if (!u) return kimorin.sendMessage(from, { text: `❌ Você não tem uma conta\n✅Use ${prefix}registrar [nome]` });
+
+    const evento = eventosAleatorios[Math.floor(Math.random() * eventosAleatorios.length)];
+    evento.acao(u);
+    salvar(db);
+
+    kimorin.sendMessage(from, { text: `🎲 Evento: ${evento.texto}` });
+  } catch (e) {
+    kimorin.sendMessage(from, { text: `❌ Erro: ${e.message}` });
+  }
+}
+
+const desafios = [
+  { id: 'duelo', descricao: 'Vença 3 duelos', objetivo: 3 },
+  { id: 'explorar', descricao: 'Explore 5 vezes', objetivo: 5 }
+];
+
+function casedesafios(kimorin, from, id, prefix) {
+  try {
+    const db = carregar();
+    const u = db[id];
+    if (!u) return kimorin.sendMessage(from, { text: `❌ Você não tem uma conta\n✅Use ${prefix}registrar [nome]` });
+
+    if (!u.desafios) {
+      u.desafios = desafios.map(d => ({ id: d.id, progresso: 0, completo: false }));
+    }
+
+    let texto = "*🎯 Desafios Atuais:*\n";
+    u.desafios.forEach(d => {
+      const def = desafios.find(x => x.id === d.id);
+      texto += `- ${def.descricao}: ${d.progresso}/${def.objetivo} ${d.completo ? '✅' : '❌'}\n`;
+    });
+
+    salvar(db);
+    kimorin.sendMessage(from, { text: texto });
+  } catch (e) {
+    kimorin.sendMessage(from, { text: `❌ Erro: ${e.message}` });
+  }
+}
+
+function atualizarDesafio(u, idDesafio, qtd=1) {
+  if (!u.desafios) return;
+  const d = u.desafios.find(x => x.id === idDesafio);
+  if (!d || d.completo) return;
+  d.progresso += qtd;
+  const obj = desafios.find(x => x.id === idDesafio).objetivo;
+  if (d.progresso >= obj) d.completo = true;
+}
+
+/* ───────────── EXPLORAR ───────────── */
+function caseexplorar(kimorin, from, id) {
+  try {
+    const db = carregar();
+    const u = db[id];
+    if (!u) return kimorin.sendMessage(from, { text: `❌ Você não tem uma conta\n✅Use ${prefix}registrar [nome]` });
+
+    const eventos = [
+      { tipo: 'moedas', qtd: Math.floor(Math.random() * 100) + 50 },
+      { tipo: 'item', nome: Object.keys(loja)[Math.floor(Math.random() * Object.keys(loja).length)] },
+      { tipo: 'nada' },
+      { tipo: 'inimigo', dano: Math.floor(Math.random() * 40) + 10 }
+    ];
+
+    const resultado = eventos[Math.floor(Math.random() * eventos.length)];
+    let texto = '';
+
+    switch (resultado.tipo) {
+      case 'moedas':
+        u.moedas += resultado.qtd;
+        texto = `🌍 Você encontrou 💰 ${resultado.qtd} moedas durante a exploração!`;
+        break;
+      case 'item':
+        u.inventario.push(resultado.nome);
+        texto = `🌿 Você encontrou um item: 🎁 *${loja[resultado.nome].nome}*!`;
+        break;
+      case 'nada':
+        texto = '😕 Você explorou mas não encontrou nada.';
+        break;
+      case 'inimigo':
+        u.vida -= resultado.dano;
+        if (u.vida <= 0) {
+          u.vida = 0;
+          u.status = 'morto';
+          texto = `☠️ Um monstro te atacou e você morreu!`;
+        } else {
+          texto = `⚔️ Um inimigo te atacou e você perdeu ${resultado.dano} de vida. ❤️ Vida atual: ${u.vida}/100`;
+        }
+        break;
+    }
+
+    ganharXp(u, 10);
+    salvar(db);
+    kimorin.sendMessage(from, { text: texto });
+
+  } catch (e) {
+    kimorin.sendMessage(from, { text: `❌ Erro: ${e.message}` });
+  }
+}
+
+/* ───────────── ROUBAR ───────────── */
+function caseroubar(kimorin, from, id, args, prefix) {
+  try {
+    const alvo = (args[0] || '').replace(/[@+]/g, '') + '@s.whatsapp.net';
+    const db = carregar();
+    const u = db[id];
+    const v = db[alvo];
+
+    if (!u || !v) return kimorin.sendMessage(from, { text: '❌ Ambos jogadores devem estar registrados.' });
+    if (id === alvo) return kimorin.sendMessage(from, { text: '🙄 Não pode roubar a si mesmo.' });
+    if (u.status !== 'vivo' || v.status !== 'vivo') return kimorin.sendMessage(from, { text: '❌ Um dos jogadores está morto ou inválido.' });
+
+    const chance = Math.random();
+    if (chance < 0.5) {
+      // Falha
+      const multa = 50;
+      u.moedas = Math.max(0, u.moedas - multa);
+      salvar(db);
+      return kimorin.sendMessage(from, { text: `🚫 Você tentou roubar ${v.nome} mas foi pego!\n💸 Perdeu ${multa} moedas.` });
+    } else {
+      // Sucesso
+      const valor = Math.floor(v.moedas * 0.25);
+      v.moedas -= valor;
+      u.moedas += valor;
+      salvar(db);
+      return kimorin.sendMessage(from, { text: `💰 Roubo bem-sucedido!\nVocê roubou ${valor} moedas de ${v.nome}.` });
+    }
+
+  } catch (e) {
+    kimorin.sendMessage(from, { text: `❌ Erro: ${e.message}` });
+  }
+}
+
+/* ───────────── CURAR OUTRO ───────────── */
+function casecurar(kimorin, from, id, args, prefix) {
+  try {
+    const alvo = (args[0] || '').replace(/[@+]/g, '') + '@s.whatsapp.net';
+    const db = carregar();
+    const u = db[id];
+    const v = db[alvo];
+
+    if (!u || !v) return kimorin.sendMessage(from, { text: '❌ Ambos devem estar registrados.' });
+    if (!u.inventario.includes('cura')) return kimorin.sendMessage(from, { text: '❌ Você não tem poção de cura.' });
+
+    v.vida = 100;
+    v.status = 'vivo';
+    u.inventario.splice(u.inventario.indexOf('cura'), 1);
+    salvar(db);
+
+    kimorin.sendMessage(from, { text: `❤️ Você curou ${v.nome} usando uma Poção de Cura.` });
+
+  } catch (e) {
+    kimorin.sendMessage(from, { text: `❌ Erro: ${e.message}` });
+  }
+}
+
+/* ───────────── COLETA DIÁRIA ───────────── */
+function casecoletar(kimorin, from, id, prefix) {
+  try {
+    const db = carregar();
+    const u = db[id];
+    if (!u) return kimorin.sendMessage(from, { text: `❌ Você não tem uma conta\n✅Use ${prefix}registrar [nome]` });
+
+    const hoje = new Date().toDateString();
+    const ultima = new Date(u.ultimaColeta || '').toDateString();
+
+    if (hoje === ultima) {
+      return kimorin.sendMessage(from, { text: '🕐 Você já coletou sua recompensa diária hoje!' });
+    }
+
+    const recompensa = 200;
+    u.moedas += recompensa;
+    u.ultimaColeta = new Date().toISOString();
+    salvar(db);
+
+    kimorin.sendMessage(from, { text: `🎁 Recompensa diária coletada: 💰 ${recompensa} moedas!` });
+
+  } catch (e) {
+    kimorin.sendMessage(from, { text: `❌ Erro: ${e.message}` });
+  }
+}
+
+/* ───────────── DOAR MOEDAS ───────────── */
+function casedoar(kimorin, from, id, args, prefix) {
+  try {
+    const alvo = (args[0] || '').replace(/[@+]/g, '') + '@s.whatsapp.net';
+    const valor = parseInt(args[1]);
+    const db = carregar();
+    const u = db[id];
+    const v = db[alvo];
+
+    if (!u || !v) return kimorin.sendMessage(from, { text: '❌ Ambos devem estar registrados.' });
+    if (isNaN(valor) || valor <= 0) return kimorin.sendMessage(from, { text: '❌ Valor inválido.' });
+    if (u.moedas < valor) return kimorin.sendMessage(from, { text: '💸 Você não tem moedas suficientes.' });
+
+    u.moedas -= valor;
+    v.moedas += valor;
+    salvar(db);
+
+    kimorin.sendMessage(from, { text: `🤝 Você doou 💰 ${valor} moedas para ${v.nome}.` });
+
+  } catch (e) {
+    kimorin.sendMessage(from, { text: `❌ Erro: ${e.message}` });
+  }
+}
+// Criar Pet
+function casecriarpet(kimorin, from, id, args, prefix) {
+  try {
+    const db = carregar();
+    const u = db[id];
+    if (!u) return kimorin.sendMessage(from, { text: `❌ Você não tem uma conta\n✅Use ${prefix}registrar [nome]` });
+    if (u.pet) return kimorin.sendMessage(from, { text: '🐾 Você já tem um pet!' });
+
+    const nomePet = args.join(' ') || 'Petzinho';
+    u.pet = {
+      nome: nomePet,
+      fome: 100,
+      energia: 100,
+      higiene: 100,
+      felicidade: 100,
+      nivel: 1,
+      xp: 0
+    };
+    salvar(db);
+    kimorin.sendMessage(from, { text: `🐾 Pet ${nomePet} criado com sucesso! Cuide bem dele.` });
+  } catch (e) {
+    kimorin.sendMessage(from, { text: `❌ Erro: ${e.message}` });
+  }
+}
+
+// Mostrar status do pet
+function casestatuspet(kimorin, from, id, prefix) {
+  try {
+    const db = carregar();
+    const u = db[id];
+    if (!u || !u.pet) return kimorin.sendMessage(from, { text: '❌ Você não tem pet.' });
+
+    const p = u.pet;
+    const status = `🐾 *Status do Pet ${p.nome}*\n`
+      + `🍴 Fome: ${p.fome}/100\n⚡ Energia: ${p.energia}/100\n🛁 Higiene: ${p.higiene}/100\n`
+      + `🎉 Felicidade: ${p.felicidade}/100\n⭐ Nível: ${p.nivel} | XP: ${p.xp}`;
+    kimorin.sendMessage(from, { text: status });
+  } catch (e) {
+    kimorin.sendMessage(from, { text: `❌ Erro: ${e.message}` });
+  }
+}
+
+// Alimentar pet
+function casealimentarpet(kimorin, from, id, prefix) {
+  try {
+    const db = carregar();
+    const u = db[id];
+    if (!u || !u.pet) return kimorin.sendMessage(from, { text: '❌ Você não tem pet.' });
+
+    if (u.moedas < 30) return kimorin.sendMessage(from, { text: '💸 Você não tem moedas suficientes para alimentar o pet.' });
+    u.moedas -= 30;
+
+    u.pet.fome = Math.min(100, u.pet.fome + 40);
+    u.pet.felicidade = Math.min(100, u.pet.felicidade + 15);
+    u.pet.xp += 10;
+
+    if (u.pet.xp >= 100) {
+      u.pet.xp -= 100;
+      u.pet.nivel++;
+      kimorin.sendMessage(from, { text: `🎉 Seu pet ${u.pet.nome} subiu para o nível ${u.pet.nivel}!` });
+    }
+
+    salvar(db);
+    kimorin.sendMessage(from, { text: `🍖 Você alimentou seu pet ${u.pet.nome}!\nFome: ${u.pet.fome}/100\nFelicidade: ${u.pet.felicidade}/100` });
+  } catch (e) {
+    kimorin.sendMessage(from, { text: `❌ Erro: ${e.message}` });
+  }
+}
+
+// Treinar pet (aumenta xp, consome energia)
+function casetreinarpet(kimorin, from, id, prefix) {
+  try {
+    const db = carregar();
+    const u = db[id];
+    if (!u || !u.pet) return kimorin.sendMessage(from, { text: '❌ Você não tem pet.' });
+
+    if (u.pet.energia < 30) return kimorin.sendMessage(from, { text: '😴 Seu pet está cansado demais para treinar.' });
+
+    u.pet.energia -= 30;
+    u.pet.xp += 25;
+    u.pet.felicidade = Math.min(100, u.pet.felicidade + 10);
+
+    if (u.pet.xp >= 100) {
+      u.pet.xp -= 100;
+      u.pet.nivel++;
+      kimorin.sendMessage(from, { text: `🎉 Seu pet ${u.pet.nome} subiu para o nível ${u.pet.nivel}!` });
+    }
+    salvar(db);
+    kimorin.sendMessage(from, { text: `🏋️‍♂️ Você treinou seu pet ${u.pet.nome}!\nEnergia: ${u.pet.energia}/100\nXP: ${u.pet.xp}` });
+  } catch (e) {
+    kimorin.sendMessage(from, { text: `❌ Erro: ${e.message}` });
+  }
+}
+
+// Pedir casamento
+function casecasar(kimorin, from, id, args, prefix) {
+  try {
+    const db = carregar();
+    const u = db[id];
+    if (!u) return kimorin.sendMessage(from, { text: `❌ Você não tem uma conta\n✅Use ${prefix}registrar [nome]` });
+    if (u.casadoCom) return kimorin.sendMessage(from, { text: '❤️ Você já é casado(a).' });
+
+    const alvoId = (args[0] || '').replace(/[@+]/g, '') + '@s.whatsapp.net';
+    if (!db[alvoId]) return kimorin.sendMessage(from, { text: '❌ A pessoa não está registrada.' });
+    if (id === alvoId) return kimorin.sendMessage(from, { text: '🙄 Não pode casar consigo mesmo.' });
+    if (db[alvoId].casadoCom) return kimorin.sendMessage(from, { text: '❌ A pessoa já é casada.' });
+
+    u.pedidoCasamento = alvoId;
+    salvar(db);
+    kimorin.sendMessage(from, { text: `💍 Pedido de casamento enviado para ${db[alvoId].nome}.` });
+  } catch (e) {
+    kimorin.sendMessage(from, { text: `❌ Erro: ${e.message}` });
+  }
+}
+
+// Aceitar casamento
+function caseaceitarcasamento(kimorin, from, id, prefix) {
+  try {
+    const db = carregar();
+    const u = db[id];
+    if (!u) return kimorin.sendMessage(from, { text: `❌ Você não tem uma conta\n✅Use ${prefix}registrar [nome]` });
+    if (u.casadoCom) return kimorin.sendMessage(from, { text: '❤️ Você já é casado(a).' });
+
+    const pedido = Object.entries(db).find(([uid, usr]) => usr.pedidoCasamento === id);
+    if (!pedido) return kimorin.sendMessage(from, { text: '❌ Ninguém te pediu em casamento.' });
+
+    const [pid, parceiro] = pedido;
+
+    u.casadoCom = pid;
+    parceiro.casadoCom = id;
+
+    parceiro.pedidoCasamento = null;
+    salvar(db);
+    kimorin.sendMessage(from, { text: `💖 Parabéns! Você e ${u.nome} agora são casados(as)!` });
+  } catch (e) {
+    kimorin.sendMessage(from, { text: `❌ Erro: ${e.message}` });
+  }
+}
+
+// Divórcio
+function casedivorcio(kimorin, from, id, prefix) {
+  try {
+    const db = carregar();
+    const u = db[id];
+    if (!u) return kimorin.sendMessage(from, { text: `❌ Você não tem uma conta\n✅Use ${prefix}registrar [nome]` });
+    if (!u.casadoCom) return kimorin.sendMessage(from, { text: '❌ Você não está casado.' });
+
+    const parceiroId = u.casadoCom;
+    u.casadoCom = null;
+    if (db[parceiroId]) db[parceiroId].casadoCom = null;
+
+    salvar(db);
+    kimorin.sendMessage(from, { text: '💔 Divórcio efetuado com sucesso.' });
+  } catch (e) {
+    kimorin.sendMessage(from, { text: `❌ Erro: ${e.message}` });
+  }
+}
+
+const trabalhos = {
+  pedreiro: { ganhoMin: 50, ganhoMax: 120, descricao: 'Constrói casas.' },
+  agricultor: { ganhoMin: 40, ganhoMax: 100, descricao: 'Cuida das plantações.' },
+  professor: { ganhoMin: 60, ganhoMax: 130, descricao: 'Ensina nas escolas.' },
+  programador: { ganhoMin: 100, ganhoMax: 250, descricao: 'Desenvolve sistemas.' },
+
+  // Raros
+  astronauta: { ganhoMin: 400, ganhoMax: 700, descricao: 'Explora o espaço.', raridade: true, requisitoNivel: 10 },
+  hacker: { ganhoMin: 300, ganhoMax: 600, descricao: 'Invade sistemas.', raridade: true, requisitoNivel: 8 }
+};
+
+// Escolher trabalho
+function caseescolhertrabalho(kimorin, from, id, args, prefix) {
+  try {
+    const db = carregar();
+    const u = db[id];
+    if (!u) return kimorin.sendMessage(from, { text: `❌ Você não tem uma conta\n✅Use ${prefix}registrar [nome]` });
+
+    const job = args[0]?.toLowerCase();
+    if (!job || !trabalhos[job]) {
+      const lista = Object.entries(trabalhos).map(([k, v]) => `- ${k} (${v.raridade ? '🔒 Raro' : 'Comum'})`).join('\n');
+      return kimorin.sendMessage(from, { text: `💼 Trabalhos disponíveis:\n${lista}` });
+    }
+
+    const trabalho = trabalhos[job];
+    if (trabalho.raridade && (u.nivel || 0) < trabalho.requisitoNivel) {
+      return kimorin.sendMessage(from, { text: `🔒 Esse trabalho exige nível ${trabalho.requisitoNivel}.` });
+    }
+
+    u.trabalho = job;
+    salvar(db);
+    kimorin.sendMessage(from, { text: `✅ Agora você trabalha como *${job}*. ${trabalho.descricao}` });
+  } catch (e) {
+    kimorin.sendMessage(from, { text: `❌ Erro: ${e.message}` });
+  }
+}
+
+// Trabalhar
+function casetrabalhar(kimorin, from, id, prefix) {
+  try {
+    const db = carregar();
+    const u = db[id];
+    if (!u || !u.trabalho || !trabalhos[u.trabalho]) {
+      return kimorin.sendMessage(from, {
+        text: `❌ Você precisa escolher um trabalho. Use: *escolhertrabalho [nome]*`
+      });
+    }
+
+    const job = trabalhos[u.trabalho];
+    const ganho = Math.floor(Math.random() * (job.ganhoMax - job.ganhoMin + 1)) + job.ganhoMin;
+
+    u.moedas = (u.moedas || 0) + ganho;
+    u.xp = (u.xp || 0) + 10;
+    u.trabalhos = (u.trabalhos || 0) + 1;
+
+    // chance de promoção
+    if ((u.trabalhos % 10 === 0) && !u.promovido) {
+      u.moedas += 100;
+      u.promovido = true;
+      kimorin.sendMessage(from, { text: '🎉 Você foi promovido e recebeu um bônus de 100 moedas!' });
+    } else if (u.trabalhos % 10 !== 0) {
+      u.promovido = false;
+    }
+
+    salvar(db);
+    kimorin.sendMessage(from, {
+      text: `💼 Você trabalhou como *${u.trabalho}*.\n💰 Ganhou *${ganho} moedas*\n📈 XP: +10`
+    });
+  } catch (e) {
+    kimorin.sendMessage(from, { text: `❌ Erro: ${e.message}` });
+  }
+}
+
+function casevertrabalho(kimorin, from, id, prefix) {
+  try {
+    const db = carregar();
+    const u = db[id];
+    if (!u || !u.trabalho) return kimorin.sendMessage(from, { text: '❌ Você ainda não escolheu um trabalho.' });
+
+    const info = trabalhos[u.trabalho];
+    kimorin.sendMessage(from, {
+      text: `💼 *Seu Trabalho:*\n📛 ${u.trabalho}\n📋 ${info.descricao}\n💸 Salário: ${info.ganhoMin} - ${info.ganhoMax}\n🧪 Total de Trabalhos: ${u.trabalhos || 0}`
+    });
+  } catch (e) {
+    kimorin.sendMessage(from, { text: `❌ Erro: ${e.message}` });
+  }
+}
+
+function casedemitir(kimorin, from, id, prefix) {
+  try {
+    const db = carregar();
+    const u = db[id];
+    if (!u || !u.trabalho) return kimorin.sendMessage(from, { text: '❌ Você não está em nenhum trabalho.' });
+
+    const nome = u.trabalho;
+    delete u.trabalho;
+    salvar(db);
+
+    kimorin.sendMessage(from, { text: `📉 Você foi demitido do cargo de *${nome}*.` });
+  } catch (e) {
+    kimorin.sendMessage(from, { text: `❌ Erro: ${e.message}` });
+  }
+}
+
+function caseferias(kimorin, from, id, prefix) {
+  try {
+    const db = carregar();
+    const u = db[id];
+    if (!u || !u.trabalho) return kimorin.sendMessage(from, { text: '❌ Você não trabalha atualmente.' });
+
+    u.vida = Math.min(100, (u.vida || 100) + 20);
+    kimorin.sendMessage(from, {
+      text: `🏖️ Você tirou férias e descansou.\n❤️ Vida restaurada em 20 pontos!`
+    });
+    salvar(db);
+  } catch (e) {
+    kimorin.sendMessage(from, { text: `❌ Erro: ${e.message}` });
+  }
+}
+
+const casas = {
+  cabana: { preco: 1000, descricao: 'Uma cabana simples.' },
+  apartamento: { preco: 5000, descricao: 'Apartamento confortável.' },
+  mansao: { preco: 20000, descricao: 'Mansão luxuosa.' }
+};
+
+// Comprar casa
+function casecomprarcasa(kimorin, from, id, args, prefix) {
+  try {
+    const db = carregar();
+    const u = db[id];
+    if (!u) return kimorin.sendMessage(from, { text: `❌ Você não tem uma conta\n✅Use ${prefix}registrar [nome]` });
+    if (u.casa) return kimorin.sendMessage(from, { text: `🏠 Você já tem uma casa: ${u.casa}` });
+
+    const casa = args[0]?.toLowerCase();
+    if (!casa || !casas[casa]) return kimorin.sendMessage(from, { text: '❌ Casa inválida. Opções: ' + Object.keys(casas).join(', ') });
+
+    if (u.moedas < casas[casa].preco) return kimorin.sendMessage(from, { text: '💸 Moedas insuficientes.' });
+
+    u.moedas -= casas[casa].preco;
+    u.casa = casa;
+    salvar(db);
+    kimorin.sendMessage(from, { text: `🏠 Parabéns! Você comprou uma casa: ${casa}.\nDescrição: ${casas[casa].descricao}` });
+  } catch (e) {
+    kimorin.sendMessage(from, { text: `❌ Erro: ${e.message}` });
+  }
+}
+
+// Ver casa
+function caseminhacasa(kimorin, from, id, prefix) {
+  try {
+    const db = carregar();
+    const u = db[id];
+    if (!u || !u.casa) return kimorin.sendMessage(from, { text: '🏚️ Você não tem casa.' });
+
+    const casa = casas[u.casa];
+    kimorin.sendMessage(from, { text: `🏠 Sua casa: ${u.casa}\nDescrição: ${casa.descricao}` });
+  } catch (e) {
+    kimorin.sendMessage(from, { text: `❌ Erro: ${e.message}` });
+  }
+}
+
+function caseroleta(kimorin, from, id, args, prefix) {
+  try {
+    const db = carregar();
+    const u = db[id];
+    if (!u) return kimorin.sendMessage(from, { text: `❌ Você não tem uma conta\n✅Use ${prefix}registrar [nome]` });
+
+    const aposta = parseInt(args[0]);
+    if (isNaN(aposta) || aposta <= 0) return kimorin.sendMessage(from, { text: '❌ Valor inválido.' });
+    if (u.moedas < aposta) return kimorin.sendMessage(from, { text: '💸 Você não tem moedas suficientes.' });
+
+    const resultado = Math.floor(Math.random() * 10);
+    if (resultado >= 7) {
+      const ganho = aposta * 2;
+      u.moedas += ganho;
+      salvar(db);
+      kimorin.sendMessage(from, { text: `🎉 Parabéns! Você ganhou ${ganho} moedas na roleta.` });
+    } else {
+      u.moedas -= aposta;
+      salvar(db);
+      kimorin.sendMessage(from, { text: `😢 Você perdeu ${aposta} moedas na roleta.` });
+    }
+  } catch (e) {
+    kimorin.sendMessage(from, { text: `❌ Erro: ${e.message}` });
+  }
+}
+
+const conquistas = {
+  explorador: { descricao: "Explorou 10 vezes", requisito: 10 },
+  trabalhador: { descricao: "Trabalhou 20 vezes", requisito: 20 },
+  rico: { descricao: "Acumulou 10.000 moedas", requisito: 10000 }
+};
+
+function caseverconquistas(kimorin, from, id, prefix) {
+  try {
+    const db = carregar();
+    const u = db[id];
+    if (!u) return kimorin.sendMessage(from, { text: `❌ Você não tem uma conta\n✅Use ${prefix}registrar [nome]` });
+
+    if (!u.conquistas) u.conquistas = {};
+
+    let texto = "*🏆 Conquistas:* \n";
+    for (const chave in conquistas) {
+      const c = conquistas[chave];
+      const alcançada = u.conquistas[chave] === true ? "✅" : "❌";
+      texto += `${alcançada} ${c.descricao}\n`;
+    }
+    kimorin.sendMessage(from, { text: texto });
+  } catch (e) {
+    kimorin.sendMessage(from, { text: `❌ Erro: ${e.message}` });
+  }
+}
+
+// Função auxiliar para checar e atualizar conquistas (chame após ações)
+function checarConquistas(u) {
+  if (!u.conquistas) u.conquistas = {};
+  if ((u.exploracoes || 0) >= 10) u.conquistas.explorador = true;
+  if ((u.trabalhos || 0) >= 20) u.conquistas.trabalhador = true;
+  if ((u.moedas || 0) >= 10000) u.conquistas.rico = true;
+}
+
+const missoes = [
+  { id: "explorar", descricao: "Explore 3 vezes", objetivo: 3 },
+  { id: "trabalhar", descricao: "Trabalhe 2 vezes", objetivo: 2 },
+  { id: "alimentarpet", descricao: "Alimente seu pet 1 vez", objetivo: 1 }
+];
+
+function casemissoes(kimorin, from, id, prefix) {
+  try {
+    const db = carregar();
+    const u = db[id];
+    if (!u) return kimorin.sendMessage(from, { text: `❌ Você não tem uma conta\n✅Use ${prefix}registrar [nome]` });
+
+    if (!u.missoes) {
+      u.missoes = missoes.map(m => ({ id: m.id, progresso: 0, completo: false }));
+    }
+
+    let texto = "*📜 Missões Diárias:*\n";
+    u.missoes.forEach(m => {
+      const mdef = missoes.find(x => x.id === m.id);
+      texto += `- ${mdef.descricao}: ${m.progresso}/${mdef.objetivo} ${m.completo ? "✅" : "❌"}\n`;
+    });
+
+    salvar(db);
+    kimorin.sendMessage(from, { text: texto });
+  } catch (e) {
+    kimorin.sendMessage(from, { text: `❌ Erro: ${e.message}` });
+  }
+}
+
+// Função auxiliar para atualizar missões (chame após eventos)
+function atualizarMissao(u, idMissao, qtd=1) {
+  if (!u.missoes) return;
+  const m = u.missoes.find(x => x.id === idMissao);
+  if (!m || m.completo) return;
+
+  m.progresso += qtd;
+  const objetivo = missoes.find(x => x.id === idMissao).objetivo;
+  if (m.progresso >= objetivo) {
+    m.completo = true;
+  }
+}
+
+const receitas = {
+  'poção_avançada': { ingredientes: { 'cura': 2, 'moedas': 50 }, resultado: 'poção_avançada' }
+  // Exemplo, você pode expandir
+};
+
+function casecraft(kimorin, from, id, args, prefix) {
+  try {
+    const item = args[0]?.toLowerCase();
+    const db = carregar();
+    const u = db[id];
+    if (!u) return kimorin.sendMessage(from, { text: `❌ Você não tem uma conta\n✅Use ${prefix}registrar [nome]` });
+    if (!item || !receitas[item]) return kimorin.sendMessage(from, { text: "❌ Receita não encontrada." });
+
+    const receita = receitas[item];
+    // Verifica ingredientes
+    for (const ing in receita.ingredientes) {
+      const qtd = receita.ingredientes[ing];
+      if (ing === 'moedas') {
+        if (u.moedas < qtd) return kimorin.sendMessage(from, { text: "💸 Moedas insuficientes." });
+      } else {
+        const invQtd = u.inventario.filter(i => i === ing).length;
+        if (invQtd < qtd) return kimorin.sendMessage(from, { text: `❌ Você não tem ${qtd}x ${ing}.` });
+      }
+    }
+    // Remove ingredientes
+    for (const ing in receita.ingredientes) {
+      const qtd = receita.ingredientes[ing];
+      if (ing === 'moedas') {
+        u.moedas -= qtd;
+      } else {
+        for (let i=0; i<qtd; i++) {
+          const idx = u.inventario.indexOf(ing);
+          if (idx > -1) u.inventario.splice(idx, 1);
+        }
+      }
+    }
+    // Adiciona resultado
+    u.inventario.push(receita.resultado);
+    salvar(db);
+    kimorin.sendMessage(from, { text: `🛠️ Você criou ${item} com sucesso!` });
+  } catch (e) {
+    kimorin.sendMessage(from, { text: `❌ Erro: ${e.message}` });
+  }
+}
+
+function casecacaotesouro(kimorin, from, id, prefix) {
+  try {
+    const db = carregar();
+    const u = db[id];
+    if (!u) return kimorin.sendMessage(from, { text: `❌ Você não tem uma conta\n✅Use ${prefix}registrar [nome]` });
+
+    const chance = Math.random();
+    if (chance > 0.7) {
+      const premio = Math.floor(Math.random() * 500) + 200;
+      u.moedas += premio;
+      salvar(db);
+      kimorin.sendMessage(from, { text: `🎉 Você encontrou um tesouro com ${premio} moedas!` });
+    } else {
+      kimorin.sendMessage(from, { text: "😢 Você não encontrou nada dessa vez." });
+    }
+  } catch (e) {
+    kimorin.sendMessage(from, { text: `❌ Erro: ${e.message}` });
+  }
+}
+
+function casemeuestado(kimorin, from, id, prefix) {
+  try {
+    const db = carregar();
+    const u = db[id];
+    if (!u) return kimorin.sendMessage(from, { text: `❌ Você não tem uma conta\n✅Use ${prefix}registrar [nome]` });
+
+    if (u.energia === undefined) u.energia = 100;
+    if (u.fome === undefined) u.fome = 100;
+
+    kimorin.sendMessage(from, {
+      text: `📊 *Seu Estado Atual*\n\n⚡ Energia: ${u.energia}/100\n🍗 Fome: ${u.fome}/100`
+    });
+  } catch (e) {
+    kimorin.sendMessage(from, { text: `Erro: ${e.message}` });
+  }
+}
+
+let leilao = null; // variável simples em memória
+
+function casemercado(bot, from) {
+  try {
+    let texto = "🛒 *Mercado Disponível:*\n";
+    for (const key in loja) {
+      texto += `- ${loja[key].nome} (Preço: ${loja[key].preco} moedas)\n`;
+    }
+    bot.sendMessage(from, { text: texto });
+  } catch (e) {
+    bot.sendMessage(from, { text: `❌ Erro: ${e.message}` });
+  }
+}
+
+// Começar leilão
+function caseleilao(bot, from, id, args) {
+  try {
+    if (leilao) return bot.sendMessage(from, { text: '⚠️ Já há um leilão em andamento.' });
+    const item = args[0];
+    if (!item || !loja[item]) return bot.sendMessage(from, { text: '❌ Item inválido para leilão.' });
+
+    leilao = {
+      item,
+      dono: id,
+      lanceAtual: 0,
+      maiorLance: null,
+      fim: Date.now() + 60000 // 1 min leilão
+    };
+
+    bot.sendMessage(from, { text: `📢 Leilão iniciado para ${loja[item].nome}! Use "lance [valor]" para participar.` });
+
+    // Finaliza leilão após 1 min
+    setTimeout(() => {
+      if (!leilao) return;
+      const db = carregar();
+      if (leilao.maiorLance && db[leilao.maiorLance.id] && db[leilao.maiorLance.id].moedas >= leilao.lanceAtual) {
+        db[leilao.maiorLance.id].moedas -= leilao.lanceAtual;
+        db[leilao.maiorLance.id].inventario.push(leilao.item);
+        db[leilao.dono].moedas += leilao.lanceAtual;
+        salvar(db);
+        bot.sendMessage(from, { text: `🎉 Leilão finalizado! ${db[leilao.maiorLance.id].nome} ganhou o ${loja[leilao.item].nome} por ${leilao.lanceAtual} moedas.` });
+      } else {
+        bot.sendMessage(from, { text: '😞 Leilão finalizado sem vencedores.' });
+      }
+      leilao = null;
+    }, 60000);
+  } catch (e) {
+    bot.sendMessage(from, { text: `❌ Erro: ${e.message}` });
+  }
+}
+
+// Dar lance no leilão
+function caselance(bot, from, id, args) {
+  try {
+    if (!leilao) return bot.sendMessage(from, { text: '❌ Não há leilão ativo.' });
+    const lance = parseInt(args[0]);
+    if (isNaN(lance) || lance <= leilao.lanceAtual) return bot.sendMessage(from, { text: '❌ Lance inválido ou menor que o atual.' });
+
+    const db = carregar();
+    const u = db[id];
+    if (!u) return bot.sendMessage(from, { text: '❌ Registre-se primeiro.' });
+    if (u.moedas < lance) return bot.sendMessage(from, { text: '💸 Moedas insuficientes para o lance.' });
+
+    leilao.lanceAtual = lance;
+    leilao.maiorLance = { id, nome: u.nome };
+    bot.sendMessage(from, { text: `💰 Lance de ${lance} moedas registrado por ${u.nome}!` });
+  } catch (e) {
+    bot.sendMessage(from, { text: `❌ Erro: ${e.message}` });
+  }
+}
+
+function casecomer(kimorin, from, id, prefix) {
+  try {
+    const db = carregar();
+    const u = db[id];
+    if (!u) return kimorin.sendMessage(from, { text: `❌ Você não tem uma conta\n✅Use ${prefix}registrar [nome]` });
+    if (u.moedas < 50) return kimorin.sendMessage(from, { text: "💸 Você precisa de 50 moedas para comer." });
+
+    u.fome = Math.min(100, (u.fome || 0) + 50);
+    u.moedas -= 50;
+    salvar(db);
+    kimorin.sendMessage(from, { text: `🍔 Você comeu e recuperou energia. Fome agora: ${u.fome}/100` });
+  } catch (e) {
+    kimorin.sendMessage(from, { text: `Erro: ${e.message}` });
+  }
+}
+
+function recuperarEnergia(u) {
+  if (u.energia === undefined) u.energia = 100;
+  u.energia = Math.min(100, u.energia + 10);
+}
+
+function casesaldo(kimorin, from, id, prefix) {
+  const db = carregar();
+  const u = db[id];
+  if (!u) return kimorin.sendMessage(from, { text: `❌ Você não tem uma conta\n✅Use ${prefix}registrar [nome]` });
+
+  u.banco = u.banco || 0;
+  kimorin.sendMessage(from, {
+    text: `🏦 *Saldo Bancário*\n💰 Carteira: ${u.moedas || 0}\n🏦 Banco: ${u.banco}`
+  });
+}
+
+function casedepositar(kimorin, from, id, args, prefix) {
+  const db = carregar();
+  const u = db[id];
+  const valor = parseInt(args[0]);
+  if (!u || isNaN(valor) || valor <= 0 || u.moedas < valor) return kimorin.sendMessage(from, { text: '❌ Valor inválido ou saldo insuficiente.' });
+
+  u.moedas -= valor;
+  u.banco = (u.banco || 0) + valor;
+  salvar(db);
+  kimorin.sendMessage(from, { text: `✅ Você depositou ${valor} moedas no banco.` });
+}
+
+function casesacar(kimorin, from, id, args) {
+  const db = carregar();
+  const u = db[id];
+  const valor = parseInt(args[0]);
+  if (!u || isNaN(valor) || valor <= 0 || (u.banco || 0) < valor) return kimorin.sendMessage(from, { text: '❌ Valor inválido ou saldo insuficiente no banco.' });
+
+  u.moedas += valor;
+  u.banco -= valor;
+  salvar(db);
+  kimorin.sendMessage(from, { text: `🏧 Você sacou ${valor} moedas.` });
+}
+
+function caseroubar(kimorin, from, id, prefix) {
+  const db = carregar();
+  const u = db[id];
+  if (!u) return kimorin.sendMessage(from, { text: `❌ Você não tem uma conta\n✅Use ${prefix}registrar [nome]` });
+
+  const chance = Math.random();
+  if (chance > 0.7) {
+    const ganho = Math.floor(Math.random() * 500) + 100;
+    u.moedas += ganho;
+    salvar(db);
+    kimorin.sendMessage(from, { text: `🕶️ Você roubou com sucesso e ganhou ${ganho} moedas!` });
+  } else {
+    const perda = Math.floor(Math.random() * 300) + 100;
+    u.moedas = Math.max(0, u.moedas - perda);
+    salvar(db);
+    kimorin.sendMessage(from, { text: `🚨 Você foi pego! Perdeu ${perda} moedas.` });
+  }
+}
+
+function casesortedodia(kimorin, from, id, prefix) {
+  const db = carregar();
+  const u = db[id];
+  const hoje = new Date().toDateString();
+
+  if (u.ultimaSorte === hoje) return kimorin.sendMessage(from, { text: '🍀 Você já usou sua sorte hoje.' });
+
+  const sorte = [
+    "Ganhou 300 moedas!",
+    "Nada aconteceu...",
+    "Perdeu 100 moedas!",
+    "Ganhou XP extra!",
+    "Ganhou item raro!"
+  ];
+
+  const resultado = sorte[Math.floor(Math.random() * sorte.length)];
+  u.ultimaSorte = hoje;
+
+  if (resultado.includes("300")) u.moedas += 300;
+  if (resultado.includes("100")) u.moedas = Math.max(0, u.moedas - 100);
+  if (resultado.includes("XP")) u.xp += 20;
+  if (resultado.includes("item")) u.inventario.push("item_raro");
+
+  salvar(db);
+  kimorin.sendMessage(from, { text: `🔮 Sorte do Dia: ${resultado}` });
+}
+
+// RENASCER
+function caserenascer(kimorin,from,id, prefix){
+  try{
+    const db=carregar();const u=db[id];
+    if(!u) return kimorin.sendMessage(from,{text:`❌ Você não tem uma conta\n✅Use ${prefix}registrar [nome]`});
+    if(u.status!=='morto') return kimorin.sendMessage(from,{text:'😅 Seu pet está vivo!'});
+
+    if(u.moedas<500) return kimorin.sendMessage(from,{text:'💸 500 moedas para renascer.'});
+    u.moedas-=500; u.status='vivo'; u.vida=100; u.fome=100; u.sono=100;
+    u.higiene=100; u.diversao=100; salvar(db);
+    kimorin.sendMessage(from,{text:'✨ Seu pet renasceu completamente saudável!'});
+  }catch(e){kimorin.sendMessage(from,{text:`❌ Erro: ${e.message}`});}
+}
+
+module.exports = {
+  caseregistrar,
+  casestatus,
+  casealimentar,
+  casedormir,
+  casebanho,
+  casebrincar,
+  caseloja,
+  caseinventario,
+  caseusaritem,
+  caseequipar,
+  casecura,
+  caserankingxp,
+  caseevento,
+  casecomprar,
+  caseleilao,
+  caselance,
+  casedesafios,
+  casemissoes,
+  caseranking,
+  caserenascer,
+  caseexplorar,
+  casecurar,
+  caseverconquistas,
+  casecraft,
+  casecacaotesouro,
+  casecoletar,
+  casedoar,
+  casecriarpet,
+  casestatuspet,
+  casealimentarpet,
+  casetreinarpet,
+  casemeuestado,
+  casecomer,
+  casesaldo,
+  casedepositar,
+  casesacar,
+  caseroubar,
+  casesortedodia,
+  casecasar,
+  casemercado,
+  caseaceitarcasamento,
+  casedivorcio,
+  caseescolhertrabalho,
+  casetrabalhar,
+  casevertrabalho,
+  casedemitir,
+  caseferias,
+  casecomprarcasa,
+  caseminhacasa,
+  caseroleta
+};

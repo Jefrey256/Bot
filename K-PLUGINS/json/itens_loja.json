@@ -1,0 +1,18 @@
+[
+{
+"nome": "poção_força", 
+"tipo": "buff", 
+"efeito": "ganhoExtra", 
+"duracao": 3,
+"custo": 10, 
+"descricao": "Aumenta seus ganhos ao trabalhar por 3 turnos." 
+},
+{
+"nome": "poção_vida", 
+"tipo": "cura", 
+"efeito": "vida", 
+"valor": 30, 
+"custo": 8, 
+"descricao": "Recupera 30 de vida." 
+}
+]

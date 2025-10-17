@@ -1,0 +1,67 @@
+[
+  {
+    "id": "553891164328@s.whatsapp.net",
+    "nome": "𝐌... ᵏᵗᵍ",
+    "nivel": 1,
+    "vida": 160,
+    "classe": "Smurf Explorador",
+    "madeira": 11,
+    "cogumelo": 47,
+    "xp": 280,
+    "gargamelVisto": true,
+    "vilarejo": "Vila Perdida",
+    "banco": 0,
+    "inventario": [
+      {
+        "nome": "poção_vida",
+        "tipo": "cura",
+        "efeito": "vida",
+        "valor": 30,
+        "custo": 8,
+        "descricao": "Recupera 30 de vida."
+      }
+    ],
+    "clan": {
+      "nome": "VangHook",
+      "lider": "553891164328@s.whatsapp.net",
+      "membros": [
+        "553891164328@s.whatsapp.net"
+      ]
+    },
+    "missao": "Nenhuma",
+    "ultimoDiario": "6/15/2025",
+    "vip": true
+  },
+  {
+    "id": "5511945689761@s.whatsapp.net",
+    "nome": "Kaizinho Soraka",
+    "nivel": 1,
+    "vida": 100,
+    "classe": "Smurf Explorador",
+    "madeira": 0,
+    "cogumelo": 0,
+    "xp": 30,
+    "gargamelVisto": true,
+    "vilarejo": "Vila Perdida",
+    "clan": {
+      "nome": "VangHook",
+      "lider": "553891164328@s.whatsapp.net"
+    }
+  },
+  {
+    "id": "557193391030@s.whatsapp.net",
+    "nome": "~🍀",
+    "nivel": 1,
+    "vida": 100,
+    "classe": "Smurf Comum",
+    "madeira": 0,
+    "cogumelo": 0,
+    "xp": 0,
+    "gargamelVisto": false,
+    "vilarejo": "Vila Perdida",
+    "clan": {
+      "nome": "VangHook",
+      "lider": "553891164328@s.whatsapp.net"
+    }
+  }
+]
